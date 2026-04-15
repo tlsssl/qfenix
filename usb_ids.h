@@ -97,8 +97,9 @@ static const struct diag_iface_map diag_iface_maps[] = {
 	{ 0x2c7c, 0x6009, 3 },	/* EM061KGL */
 	/* Quectel (interface 2) */
 	{ 0x2c7c, 0x0133, 2 },	/* RG650VEU */
-	{ 0x2c7c, 0x030b, 2 },	/* EG120KEABA */
 	{ 0x2c7c, 0x0514, 2 },	/* EG060K-EA */
+	/* Quectel (interface 0) — EM060K-GL custom composition (GL.iNet Mudi V2) */
+	{ 0x2c7c, 0x030b, 0 },	/* EM060K-GL (also reported as EG120KEABA) */
 	/* Qualcomm reference */
 	{ 0x05c6, 0x90db, 2 },	/* AG600K-EM / SDX55 ref */
 	{ 0x05c6, 0x9091, 0 },	/* SDX55 DIAG composite */

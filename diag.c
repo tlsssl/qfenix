@@ -689,7 +689,7 @@ static int diag_set_mode(struct diag_session *sess, uint16_t mode)
 	int n;
 
 	cmd[0] = DIAG_CONTROL_F;
-	memcpy(&cmd[1], &mode, 2);
+	write_le16(&cmd[1], mode);
 
 	n = diag_send(sess, cmd, sizeof(cmd), resp, sizeof(resp));
 	if (n < 1 || resp[0] != DIAG_CONTROL_F) {
@@ -1102,7 +1102,7 @@ static int efs_sync(struct diag_session *sess)
 	/* SyncNoWait — start async sync for "/" */
 	memset(cmd, 0, sizeof(cmd));
 	efs_cmd_header(cmd, sess->efs_method, EFS2_DIAG_SYNC_NO_WAIT);
-	memcpy(&cmd[4], &seq, 2);		/* sequence */
+	write_le16(&cmd[4], seq);		/* sequence */
 	cmd[6] = '/';				/* path */
 	cmd[7] = '\0';
 
@@ -1114,8 +1114,8 @@ static int efs_sync(struct diag_session *sess)
 		return 0;
 	}
 
-	memcpy(&token, &resp[6], 4);
-	memcpy(&error, &resp[10], 4);
+	token = read_le32(&resp[6]);
+	error = (int32_t)read_le32(&resp[10]);
 
 	if (error != 0) {
 		ux_debug("EFS sync error=%d, sleeping 5s\n", error);
@@ -1132,8 +1132,8 @@ static int efs_sync(struct diag_session *sess)
 		memset(cmd, 0, sizeof(cmd));
 		efs_cmd_header(cmd, sess->efs_method,
 			       EFS2_DIAG_SYNC_GET_STATUS);
-		memcpy(&cmd[4], &seq, 2);	/* sequence */
-		memcpy(&cmd[6], &token, 4);	/* token */
+		write_le16(&cmd[4], seq);	/* sequence */
+		write_le32(&cmd[6], token);	/* token */
 		cmd[10] = '/';			/* path */
 		cmd[11] = '\0';
 
@@ -1178,16 +1178,16 @@ static void efs_hello_init(uint8_t *cmd, uint8_t method)
 
 	memset(cmd, 0, 4 + 0x28);
 	efs_cmd_header(cmd, method, EFS2_DIAG_HELLO);
-	memcpy(&cmd[4], &window, 4);	/* targetPacketWindowSize */
-	memcpy(&cmd[8], &window, 4);	/* targetPacketWindowByteSize */
-	memcpy(&cmd[12], &window, 4);	/* hostPacketWindowSize */
-	memcpy(&cmd[16], &window, 4);	/* hostPacketWindowByteSize */
-	memcpy(&cmd[20], &window, 4);	/* dirIteratorWindowSize */
-	memcpy(&cmd[24], &window, 4);	/* dirIteratorWindowByteSize */
-	memcpy(&cmd[28], &ver, 4);	/* version */
-	memcpy(&cmd[32], &ver, 4);	/* minVersion */
-	memcpy(&cmd[36], &ver, 4);	/* maxVersion */
-	memcpy(&cmd[40], &features, 4);	/* featureBits */
+	write_le32(&cmd[4], window);	/* targetPacketWindowSize */
+	write_le32(&cmd[8], window);	/* targetPacketWindowByteSize */
+	write_le32(&cmd[12], window);	/* hostPacketWindowSize */
+	write_le32(&cmd[16], window);	/* hostPacketWindowByteSize */
+	write_le32(&cmd[20], window);	/* dirIteratorWindowSize */
+	write_le32(&cmd[24], window);	/* dirIteratorWindowByteSize */
+	write_le32(&cmd[28], ver);	/* version */
+	write_le32(&cmd[32], ver);	/* minVersion */
+	write_le32(&cmd[36], ver);	/* maxVersion */
+	write_le32(&cmd[40], features);	/* featureBits */
 }
 
 int diag_efs_detect(struct diag_session *sess)
@@ -1245,8 +1245,8 @@ static int efs_opendir(struct diag_session *sess, const char *path)
 	if (n < 12)
 		return -1;
 
-	memcpy(&dirp, &resp[4], 4);
-	memcpy(&diag_errno, &resp[8], 4);
+	dirp = (int32_t)read_le32(&resp[4]);
+	diag_errno = (int32_t)read_le32(&resp[8]);
 
 	if (diag_errno != 0) {
 		ux_err("EFS opendir '%s' failed (errno=%d)\n",
@@ -1267,23 +1267,23 @@ static int efs_readdir(struct diag_session *sess, int32_t dirp,
 
 	memset(cmd, 0, sizeof(cmd));
 	efs_cmd_header(cmd, sess->efs_method, EFS2_DIAG_READDIR);
-	memcpy(&cmd[4], &dirp, 4);
-	memcpy(&cmd[8], &seqno, 4);
+	write_le32(&cmd[4], (uint32_t)dirp);
+	write_le32(&cmd[8], seqno);
 
 	n = diag_send(sess, cmd, sizeof(cmd), resp, sizeof(resp));
 	if (n < 40)
 		return -1;
 
-	memcpy(&diag_errno, &resp[12], 4);
+	diag_errno = (int32_t)read_le32(&resp[12]);
 	if (diag_errno != 0)
 		return -1;
 
-	memcpy(&entry->entry_type, &resp[16], 4);
-	memcpy(&entry->mode, &resp[20], 4);
-	memcpy(&entry->size, &resp[24], 4);
-	memcpy(&entry->atime, &resp[28], 4);
-	memcpy(&entry->mtime, &resp[32], 4);
-	memcpy(&entry->ctime, &resp[36], 4);
+	entry->entry_type = (int32_t)read_le32(&resp[16]);
+	entry->mode = (int32_t)read_le32(&resp[20]);
+	entry->size = (int32_t)read_le32(&resp[24]);
+	entry->atime = (int32_t)read_le32(&resp[28]);
+	entry->mtime = (int32_t)read_le32(&resp[32]);
+	entry->ctime = (int32_t)read_le32(&resp[36]);
 
 	if (entry->entry_type == 0)
 		return 1; /* No more entries */
@@ -1310,7 +1310,7 @@ static void efs_closedir(struct diag_session *sess, int32_t dirp)
 
 	memset(cmd, 0, sizeof(cmd));
 	efs_cmd_header(cmd, sess->efs_method, EFS2_DIAG_CLOSEDIR);
-	memcpy(&cmd[4], &dirp, 4);
+	write_le32(&cmd[4], (uint32_t)dirp);
 
 	diag_send(sess, cmd, sizeof(cmd), resp, sizeof(resp));
 }
@@ -1369,16 +1369,16 @@ static int efs_open(struct diag_session *sess, const char *path,
 
 	memset(cmd, 0, sizeof(cmd));
 	efs_cmd_header(cmd, sess->efs_method, EFS2_DIAG_OPEN);
-	memcpy(&cmd[4], &oflag, 4);
-	memcpy(&cmd[8], &mode, 4);
+	write_le32(&cmd[4], oflag);
+	write_le32(&cmd[8], mode);
 	memcpy(&cmd[12], path, path_len);
 
 	n = diag_send(sess, cmd, 12 + path_len, resp, sizeof(resp));
 	if (n < 12)
 		return -1;
 
-	memcpy(&fdata, &resp[4], 4);
-	memcpy(&diag_errno, &resp[8], 4);
+	fdata = (int32_t)read_le32(&resp[4]);
+	diag_errno = (int32_t)read_le32(&resp[8]);
 
 	if (fdata < 0 || diag_errno != 0) {
 		ux_debug("EFS open '%s' failed (fd=%d, errno=%d, "
@@ -1401,16 +1401,16 @@ static int efs_read(struct diag_session *sess, int32_t fdata,
 
 	memset(cmd, 0, sizeof(cmd));
 	efs_cmd_header(cmd, sess->efs_method, EFS2_DIAG_READ);
-	memcpy(&cmd[4], &fdata, 4);
-	memcpy(&cmd[8], &nbytes, 4);
-	memcpy(&cmd[12], &offset, 4);
+	write_le32(&cmd[4], (uint32_t)fdata);
+	write_le32(&cmd[8], nbytes);
+	write_le32(&cmd[12], offset);
 
 	n = diag_send(sess, cmd, sizeof(cmd), resp, sizeof(resp));
 	if (n < 20)
 		return -1;
 
-	memcpy(&bytes_read, &resp[12], 4);
-	memcpy(&diag_errno, &resp[16], 4);
+	bytes_read = (int32_t)read_le32(&resp[12]);
+	diag_errno = (int32_t)read_le32(&resp[16]);
 
 	if (diag_errno != 0 || bytes_read < 0)
 		return -1;
@@ -1431,7 +1431,7 @@ static void efs_close(struct diag_session *sess, int32_t fdata)
 
 	memset(cmd, 0, sizeof(cmd));
 	efs_cmd_header(cmd, sess->efs_method, EFS2_DIAG_CLOSE);
-	memcpy(&cmd[4], &fdata, 4);
+	write_le32(&cmd[4], (uint32_t)fdata);
 
 	diag_send(sess, cmd, sizeof(cmd), resp, sizeof(resp));
 }
@@ -1457,16 +1457,16 @@ static int efs_stat(struct diag_session *sess, const char *path,
 	if (n < 32)
 		return -1;
 
-	memcpy(&diag_errno, &resp[4], 4);
+	diag_errno = (int32_t)read_le32(&resp[4]);
 	if (diag_errno != 0)
 		return -1;
 
-	memcpy(&st->mode, &resp[8], 4);
-	memcpy(&st->size, &resp[12], 4);
-	memcpy(&st->nlink, &resp[16], 4);
-	memcpy(&st->atime, &resp[20], 4);
-	memcpy(&st->mtime, &resp[24], 4);
-	memcpy(&st->ctime, &resp[28], 4);
+	st->mode = (int32_t)read_le32(&resp[8]);
+	st->size = (int32_t)read_le32(&resp[12]);
+	st->nlink = (int32_t)read_le32(&resp[16]);
+	st->atime = (int32_t)read_le32(&resp[20]);
+	st->mtime = (int32_t)read_le32(&resp[24]);
+	st->ctime = (int32_t)read_le32(&resp[28]);
 
 	return 0;
 }
@@ -1674,16 +1674,16 @@ static int efs_write(struct diag_session *sess, int32_t fdata,
 	 */
 	memset(cmd, 0, 12);
 	efs_cmd_header(cmd, sess->efs_method, EFS2_DIAG_WRITE);
-	memcpy(&cmd[4], &fdata, 4);
-	memcpy(&cmd[8], &offset, 4);
+	write_le32(&cmd[4], (uint32_t)fdata);
+	write_le32(&cmd[8], offset);
 	memcpy(&cmd[12], data, len);
 
 	n = diag_send(sess, cmd, 12 + len, resp, sizeof(resp));
 	if (n < 20)
 		return -1;
 
-	memcpy(&bytes_written, &resp[12], 4);
-	memcpy(&diag_errno, &resp[16], 4);
+	bytes_written = (int32_t)read_le32(&resp[12]);
+	diag_errno = (int32_t)read_le32(&resp[16]);
 
 	if (diag_errno != 0 || bytes_written < 0)
 		return -1;
@@ -1714,14 +1714,14 @@ static int efs_mkdir_op(struct diag_session *sess, const char *path,
 
 	memset(cmd, 0, sizeof(cmd));
 	efs_cmd_header(cmd, sess->efs_method, EFS2_DIAG_MKDIR);
-	memcpy(&cmd[4], &mode, 2);
+	write_le16(&cmd[4], (uint16_t)mode);
 	memcpy(&cmd[6], path, path_len);
 
 	n = diag_send(sess, cmd, 6 + path_len, resp, sizeof(resp));
 	if (n < 8)
 		return -1;
 
-	memcpy(&diag_errno, &resp[4], 4);
+	diag_errno = (int32_t)read_le32(&resp[4]);
 
 	/* EEXIST (17) and ENXIO (6) are OK — ENXIO means virtual mount point */
 	if (diag_errno != 0 && diag_errno != 17 && diag_errno != 6) {
@@ -1785,7 +1785,7 @@ static int efs_symlink_op(struct diag_session *sess, const char *target,
 	if (n < 8)
 		return -1;
 
-	memcpy(&diag_errno, &resp[4], 4);
+	diag_errno = (int32_t)read_le32(&resp[4]);
 	if (diag_errno != 0)
 		return -1;
 
@@ -1807,14 +1807,14 @@ static int efs_chmod_op(struct diag_session *sess, const char *path,
 
 	memset(cmd, 0, sizeof(cmd));
 	efs_cmd_header(cmd, sess->efs_method, EFS2_DIAG_CHMOD);
-	memcpy(&cmd[4], &mode, 2);
+	write_le16(&cmd[4], (uint16_t)mode);
 	memcpy(&cmd[6], path, path_len);
 
 	n = diag_send(sess, cmd, 6 + path_len, resp, sizeof(resp));
 	if (n < 8)
 		return -1;
 
-	memcpy(&diag_errno, &resp[4], 4);
+	diag_errno = (int32_t)read_le32(&resp[4]);
 	if (diag_errno != 0)
 		return -1;
 
@@ -1842,7 +1842,7 @@ static int efs_readlink(struct diag_session *sess, const char *path,
 	if (n < 8)
 		return -1;
 
-	memcpy(&diag_errno, &resp[4], 4);
+	diag_errno = (int32_t)read_le32(&resp[4]);
 	if (diag_errno != 0)
 		return -1;
 
@@ -1889,8 +1889,8 @@ static int efs_get_item_op(struct diag_session *sess, uint8_t opcode,
 	if (n < 12)
 		return -1;
 
-	memcpy(&data_length, &resp[4], 4);
-	memcpy(&diag_errno, &resp[8], 4);
+	data_length = (int32_t)read_le32(&resp[4]);
+	diag_errno = (int32_t)read_le32(&resp[8]);
 
 	if (diag_errno != 0)
 		return -1;
@@ -1958,16 +1958,16 @@ static int efs_put_item(struct diag_session *sess, const char *path,
 
 	memset(cmd, 0, 14);
 	efs_cmd_header(cmd, sess->efs_method, EFS2_DIAG_PUT);
-	memcpy(&cmd[4], &dl16, 2);		/* data_len: uint16 */
+	write_le16(&cmd[4], dl16);		/* data_len: uint16 */
 	/* cmd[6..7] = 0 (padding) */
-	memcpy(&cmd[8], &flags, 4);		/* flags: int32 */
-	memcpy(&cmd[12], &mode16, 2);		/* mode: int16 */
+	write_le32(&cmd[8], (uint32_t)flags);	/* flags: int32 */
+	write_le16(&cmd[12], (uint16_t)mode16);	/* mode: int16 */
 	memcpy(&cmd[14], data, data_len);	/* data */
 	memcpy(&cmd[14 + data_len], path, path_len);	/* path\0 */
 
 	n = diag_send(sess, cmd, 14 + data_len + path_len, resp, sizeof(resp));
 	if (n >= 10) {
-		memcpy(&diag_errno, &resp[6], 2);	/* errno: int16 at offset 6 */
+		diag_errno = (int16_t)read_le16(&resp[6]);	/* errno: int16 at offset 6 */
 		if (diag_errno == 0)
 			return 0;
 		ux_debug("PUT '%s' errno=%d\n", path, (int)diag_errno);
@@ -2102,7 +2102,7 @@ static int efs_image_open(struct diag_session *sess, const char *path,
 
 	memset(cmd, 0, sizeof(cmd));
 	efs_cmd_header(cmd, sess->efs_method, EFS2_DIAG_FS_IMAGE_OPEN);
-	memcpy(&cmd[4], &seq, 2);
+	write_le16(&cmd[4], seq);
 	cmd[6] = image_type;
 	memcpy(&cmd[7], path, path_len);
 
@@ -2110,8 +2110,8 @@ static int efs_image_open(struct diag_session *sess, const char *path,
 	if (n < 12)
 		return -1;
 
-	memcpy(&handle, &resp[4], 4);
-	memcpy(&diag_errno, &resp[8], 4);
+	handle = (int32_t)read_le32(&resp[4]);
+	diag_errno = (int32_t)read_le32(&resp[8]);
 
 	if (handle < 0 || diag_errno != 0) {
 		ux_err("EFS image open failed (handle=%d, errno=%d)\n",
@@ -2135,14 +2135,14 @@ static int efs_image_read(struct diag_session *sess, int32_t handle,
 
 	memset(cmd, 0, sizeof(cmd));
 	efs_cmd_header(cmd, sess->efs_method, EFS2_DIAG_FS_IMAGE_READ);
-	memcpy(&cmd[4], &handle, 4);
-	memcpy(&cmd[8], &seq, 2);
+	write_le32(&cmd[4], (uint32_t)handle);
+	write_le16(&cmd[8], seq);
 
 	n = diag_send(sess, cmd, sizeof(cmd), resp, sizeof(resp));
 	if (n < 15)
 		return -1;
 
-	memcpy(&diag_errno, &resp[10], 4);
+	diag_errno = (int32_t)read_le32(&resp[10]);
 	end_flag = resp[14];
 
 	if (diag_errno != 0) {
@@ -2173,7 +2173,7 @@ static void efs_image_close(struct diag_session *sess, int32_t handle)
 
 	memset(cmd, 0, sizeof(cmd));
 	efs_cmd_header(cmd, sess->efs_method, EFS2_DIAG_FS_IMAGE_CLOSE);
-	memcpy(&cmd[4], &handle, 4);
+	write_le32(&cmd[4], (uint32_t)handle);
 
 	diag_send(sess, cmd, sizeof(cmd), resp, sizeof(resp));
 }
@@ -2888,7 +2888,7 @@ static int efs_unlink(struct diag_session *sess, const char *path)
 	if (n < 8)
 		return -1;
 
-	memcpy(&diag_errno, &resp[4], 4);
+	diag_errno = (int32_t)read_le32(&resp[4]);
 	if (diag_errno != 0) {
 		ux_err("EFS unlink '%s' failed (errno=%d)\n", path, diag_errno);
 		return -1;
@@ -2917,7 +2917,7 @@ static int efs_rmdir_op(struct diag_session *sess, const char *path)
 	if (n < 8)
 		return -1;
 
-	memcpy(&diag_errno, &resp[4], 4);
+	diag_errno = (int32_t)read_le32(&resp[4]);
 	if (diag_errno != 0) {
 		ux_err("EFS rmdir '%s' failed (errno=%d)\n", path, diag_errno);
 		return -1;
@@ -3942,7 +3942,7 @@ static void xqcn_write_backup_dir_entry(FILE *fp, int idx,
 	size_t path_len = strlen(path);
 	size_t total = 8 + path_len;
 
-	memcpy(&header[4], &mode, 4);
+	write_le32(&header[4], (uint32_t)mode);
 
 	fprintf(fp, "          <Stream Length='%zu' Name='%08X' Value='",
 		total, idx);
@@ -4094,9 +4094,9 @@ int diag_efs_backup_xqcn(struct diag_session *sess, const char *output_file)
 			uint32_t nv_id = def_nv.items[i].item;
 
 			memset(rec, 0, sizeof(rec));
-			memcpy(&rec[0], &rsize, 2);
-			memcpy(&rec[2], &sub, 2);
-			memcpy(&rec[4], &nv_id, 4);
+			write_le16(&rec[0], rsize);
+			write_le16(&rec[2], sub);
+			write_le32(&rec[4], nv_id);
 			memcpy(&rec[8], def_nv.items[i].data,
 			       NV_ITEM_DATA_SIZE);
 
@@ -4120,9 +4120,9 @@ int diag_efs_backup_xqcn(struct diag_session *sess, const char *output_file)
 			uint32_t nv_id = sim1_nv.items[i].item;
 
 			memset(rec, 0, sizeof(rec));
-			memcpy(&rec[0], &rsize, 2);
-			memcpy(&rec[2], &sub, 2);
-			memcpy(&rec[4], &nv_id, 4);
+			write_le16(&rec[0], rsize);
+			write_le16(&rec[2], sub);
+			write_le32(&rec[4], nv_id);
 			memcpy(&rec[8], sim1_nv.items[i].data,
 			       NV_ITEM_DATA_SIZE);
 
@@ -4245,11 +4245,11 @@ int diag_efs_backup_xqcn(struct diag_session *sess, const char *output_file)
 		uint16_t tool_len = strlen(tool);
 
 		memset(mpi, 0, sizeof(mpi));
-		memcpy(&mpi[0], &magic, 4);
-		memcpy(&mpi[4], &reserved, 4);
-		memcpy(&mpi[8], &model_len, 2);
+		write_le32(&mpi[0], magic);
+		write_le32(&mpi[4], reserved);
+		write_le16(&mpi[8], model_len);
 		memcpy(&mpi[10], model, model_len);
-		memcpy(&mpi[10 + model_len], &tool_len, 2);
+		write_le16(&mpi[10 + model_len], tool_len);
 		memcpy(&mpi[12 + model_len], tool, tool_len);
 		mpi_len = 12 + model_len + tool_len;
 
@@ -4266,7 +4266,7 @@ int diag_efs_backup_xqcn(struct diag_session *sess, const char *output_file)
 		uint16_t fm_data_len = fm_len;
 		size_t total = 2 + fm_len;
 
-		memcpy(&fm_buf[0], &fm_data_len, 2);
+		write_le16(&fm_buf[0], fm_data_len);
 		memcpy(&fm_buf[2], feature_mask, fm_len);
 		fprintf(fp, "      <Stream Length='%zu'"
 			" Name='Feature_Mask' Value='", total);
@@ -4282,7 +4282,7 @@ int diag_efs_backup_xqcn(struct diag_session *sess, const char *output_file)
 		uint8_t fv[6] = {0};
 		uint32_t version = XQCN_FILE_VERSION;
 
-		memcpy(fv, &version, 4);
+		write_le32(fv, version);
 		fprintf(fp, "  <Stream Length='6'"
 			" Name='File_Version' Value='");
 		xqcn_write_hex(fp, fv, 6);
@@ -4631,7 +4631,7 @@ int diag_efs_restore_xqcn(struct diag_session *sess, const char *xqcn_file)
 				uint16_t item_id;
 				int wr;
 
-				memcpy(&nv_id, &data[off + 4], 4);
+				nv_id = read_le32(&data[off + 4]);
 				item_id = (uint16_t)nv_id;
 				wr = diag_nv_write(sess, item_id,
 						   &data[off + 8],
@@ -4821,7 +4821,7 @@ int diag_xqcn_to_tar(const char *xqcn_file, const char *tar_file)
 					uint32_t nv_id;
 					char nv_path[64];
 
-					memcpy(&nv_id, &data[off + 4], 4);
+					nv_id = read_le32(&data[off + 4]);
 					snprintf(nv_path, sizeof(nv_path),
 						 "nv_items/%05u.bin", nv_id);
 					tar_write_header(fd, nv_path, 0100644,
@@ -5178,9 +5178,9 @@ int diag_tar_to_xqcn(const char *tar_file, const char *xqcn_file)
 			uint16_t sub = 0x0001;
 
 			memset(rec, 0, sizeof(rec));
-			memcpy(&rec[0], &rsize, 2);
-			memcpy(&rec[2], &sub, 2);
-			memcpy(&rec[4], &nv_items[i].nv_id, 4);
+			write_le16(&rec[0], rsize);
+			write_le16(&rec[2], sub);
+			write_le32(&rec[4], nv_items[i].nv_id);
 			memcpy(&rec[8], nv_items[i].data, NV_ITEM_DATA_SIZE);
 
 			if (i > 0)
@@ -5255,9 +5255,9 @@ int diag_tar_to_xqcn(const char *tar_file, const char *xqcn_file)
 		uint32_t magic = XQCN_MPI_MAGIC;
 		uint16_t zero = 0;
 
-		memcpy(&mpi[0], &magic, 4);
-		memcpy(&mpi[8], &zero, 2);
-		memcpy(&mpi[10], &zero, 2);
+		write_le32(&mpi[0], magic);
+		write_le16(&mpi[8], zero);
+		write_le16(&mpi[10], zero);
 		fprintf(fp, "      <Stream Length='12'"
 			" Name='Mobile_Property_Info' Value='");
 		xqcn_write_hex(fp, mpi, 12);
@@ -5272,7 +5272,7 @@ int diag_tar_to_xqcn(const char *tar_file, const char *xqcn_file)
 		uint8_t fv[6] = {0};
 		uint32_t version = XQCN_FILE_VERSION;
 
-		memcpy(fv, &version, 4);
+		write_le32(fv, version);
 		fprintf(fp, "  <Stream Length='6'"
 			" Name='File_Version' Value='");
 		xqcn_write_hex(fp, fv, 6);
