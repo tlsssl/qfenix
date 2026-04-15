@@ -600,14 +600,24 @@ static void guid_to_string(const struct gpt_guid *guid, char *out, size_t len)
 
 static void print_size_human(uint64_t bytes, char *out, size_t len)
 {
-	if (bytes >= (uint64_t)1024 * 1024 * 1024)
-		snprintf(out, len, "%.1f GiB",
-			 (double)bytes / (1024.0 * 1024.0 * 1024.0));
-	else if (bytes >= 1024 * 1024)
-		snprintf(out, len, "%.1f MiB",
-			 (double)bytes / (1024.0 * 1024.0));
-	else if (bytes >= 1024)
-		snprintf(out, len, "%.1f KiB", (double)bytes / 1024.0);
+	/* Integer-only math — avoids FPU on targets without hardware float
+	 * (e.g. MIPS 24Kc on OpenWrt ath79). Tenths are computed separately. */
+	const uint64_t GiB = (uint64_t)1024 * 1024 * 1024;
+	const uint64_t MiB = (uint64_t)1024 * 1024;
+	const uint64_t KiB = 1024;
+
+	if (bytes >= GiB)
+		snprintf(out, len, "%llu.%llu GiB",
+			 (unsigned long long)(bytes / GiB),
+			 (unsigned long long)((bytes % GiB) * 10 / GiB));
+	else if (bytes >= MiB)
+		snprintf(out, len, "%llu.%llu MiB",
+			 (unsigned long long)(bytes / MiB),
+			 (unsigned long long)((bytes % MiB) * 10 / MiB));
+	else if (bytes >= KiB)
+		snprintf(out, len, "%llu.%llu KiB",
+			 (unsigned long long)(bytes / KiB),
+			 (unsigned long long)((bytes % KiB) * 10 / KiB));
 	else
 		snprintf(out, len, "%llu B", (unsigned long long)bytes);
 }

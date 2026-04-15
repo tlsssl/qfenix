@@ -922,9 +922,13 @@ static int firehose_issue_read(struct qdl_device *qdl, struct read_op *read_op,
 			n = qdl_read(qdl, (char *)buf + got,
 				     wanted - got, 30000);
 			if (n < 0) {
-				ux_err("raw read failed (error %d) at %.1f%% of %s\n",
+				unsigned int pct_x10 = read_op->num_sectors ?
+					(unsigned int)((uint64_t)(read_op->num_sectors - left) * 1000 /
+						       read_op->num_sectors) : 0;
+
+				ux_err("raw read failed (error %d) at %u.%u%% of %s\n",
 				       n,
-				       100.0 * (read_op->num_sectors - left) / read_op->num_sectors,
+				       pct_x10 / 10, pct_x10 % 10,
 				       read_op->filename ? read_op->filename : "?");
 				/*
 				 * Write whatever we received before the
@@ -940,8 +944,12 @@ static int firehose_issue_read(struct qdl_device *qdl, struct read_op *read_op,
 				goto drain;
 			}
 			if (n == 0) {
-				ux_err("unexpected EOF at %.1f%% of %s\n",
-				       100.0 * (read_op->num_sectors - left) / read_op->num_sectors,
+				unsigned int pct_x10 = read_op->num_sectors ?
+					(unsigned int)((uint64_t)(read_op->num_sectors - left) * 1000 /
+						       read_op->num_sectors) : 0;
+
+				ux_err("unexpected EOF at %u.%u%% of %s\n",
+				       pct_x10 / 10, pct_x10 % 10,
 				       read_op->filename ? read_op->filename : "?");
 				if (got > 0 && fd >= 0) {
 					int wr __attribute__((unused));

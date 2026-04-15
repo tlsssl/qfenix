@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdlib.h>
 #ifdef _WIN32
 #include <windows.h>
@@ -287,13 +288,16 @@ void ux_progress(const char *fmt, unsigned int value, unsigned int max, ...)
 	unsigned int bar_length;
 	unsigned int bars;
 	unsigned int dashes;
+	unsigned int percent_x100;	/* percent scaled by 100 (0..10000) */
 	struct timeval now;
 	char task_name[32];
-	float percent;
 	va_list ap;
 
 	/* Don't print progress is window is too narrow, or if stdout is redirected */
 	if (ux_width < 30)
+		return;
+
+	if (max == 0)
 		return;
 
 	/* Avoid updating the console more than UX_PROGRESS_REFRESH_RATE per second */
@@ -313,15 +317,18 @@ void ux_progress(const char *fmt, unsigned int value, unsigned int max, ...)
 	vsnprintf(task_name, sizeof(task_name), fmt, ap);
 	va_end(ap);
 
+	/* Integer-only math — avoids FPU on targets without hardware float
+	 * (e.g. MIPS 24Kc on OpenWrt ath79). */
 	bar_length = ux_width - (20 + 4 + 6);
-	percent = (float)value / max;
-	bars = percent * bar_length;
+	bars = (unsigned int)((uint64_t)value * bar_length / max);
 	dashes = bar_length - bars;
+	percent_x100 = (unsigned int)((uint64_t)value * 10000 / max);
 
-	printf("%-20.20s [%.*s%.*s] %1.2f%%%n\r", task_name,
+	printf("%-20.20s [%.*s%.*s] %u.%02u%%%n\r", task_name,
 	       bars, progress_hashes,
 	       dashes, progress_dashes,
-	       percent * 100,
+	       percent_x100 / 100,
+	       percent_x100 % 100,
 	       &ux_cur_line_length);
 	fflush(stdout);
 
